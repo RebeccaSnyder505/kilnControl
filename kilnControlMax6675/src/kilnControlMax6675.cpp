@@ -13,7 +13,6 @@
 #include "Particle.h"
 #include "Adafruit_GFX.h"
 #include "Adafruit_SSD1306.h"
-#include "max6675.h"
 #include "Button.h"
 #include "math.h"
 
@@ -47,7 +46,7 @@ void setup() {
   pinMode(SOPIN, OUTPUT);
   pinMode(buttonPin, OUTPUT);
 
-  digitalWrite(CSPIN, HIGH); // comms off
+  digitalWrite(CSPIN, HIGH); // I think this will initialize to "off"?
 }
 
 // loop() runs over and over again, as quickly as it can execute.
@@ -91,13 +90,13 @@ byte spiread(void) {
   int i;
   byte d = 0;
   for (i = 7; i >= 0; i--) {
-    digitalWrite(SCKPIN, LOW);
+    digitalWrite(CSPIN, LOW); // SCKPIN? perhaps is wrong
     delayMicroseconds(10);
     if (digitalRead(SOPIN)) {
       // set the bit to 0 no matter what
       d |= (1 << i);
     }
-    digitalWrite(SCKPIN, HIGH);
+    digitalWrite(CSPIN, HIGH);
     delayMicroseconds(10);
   }
   return d;
