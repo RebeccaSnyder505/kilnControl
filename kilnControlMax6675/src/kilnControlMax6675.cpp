@@ -29,7 +29,7 @@ float readCelsius(void);
 
 
 
-//int readTemperatureThermocouple (*thermoArray);
+int readTemperatureThermocouple (*thermoArray);
 
 
 
@@ -39,6 +39,7 @@ SYSTEM_MODE(SEMI_AUTOMATIC);
 
 
 void setup() {
+  SPI.begin(CSPIN);
   Serial.begin(9600);
   delay(500);
   pinMode(SCKPIN, OUTPUT);
@@ -46,7 +47,7 @@ void setup() {
   pinMode(SOPIN, OUTPUT);
   pinMode(buttonPin, OUTPUT);
 
-  digitalWrite(CSPIN, HIGH); // I think this will initialize to "off"?
+
 }
 
 // loop() runs over and over again, as quickly as it can execute.
@@ -56,13 +57,14 @@ void loop() {
   delay(5000); // must delay minimum of 250ms
 }
 
-// int readTemperatureThermocouple(*thermoArray) {
-//   int i = 0;
-//   for (i=0;i<=11;i++) {
-//     thermoArray[i] = digitalread(SOPIN);
-//     Serial.printf("place %d is value %d \n",i,thermoArray[i]);
-//   }
-// }
+int readTemperatureThermocouple(*thermoArray) {
+  digitalWrite(CSPIN,LOW);
+  int i = 0;
+  for (i=0;i<=11;i++) {
+    thermoArray[i] = SPI1.transfer();
+    Serial.printf("place %d is value %d \n",i,thermoArray[i]);
+  }
+}
 
 float readCelsius(void) {
   uint16_t v;
