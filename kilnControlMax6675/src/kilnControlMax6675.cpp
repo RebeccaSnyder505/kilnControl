@@ -13,15 +13,16 @@
 #include "Particle.h"
 #include "Adafruit_GFX.h"
 #include "Adafruit_SSD1306.h"
+#include "max6675.h"
 #include "Button.h"
 
 //MAX 6675 K-thermocouple converter
-const int SCKPIN = D17;
-const int CSPIN = D15;
-const int SOPIN = D16;
+const int SCKPIN = D17; // serial clock
+const int CSPIN = D18; // SS or CS select
+const int SOPIN = D16; // MISO or CIPO 
 const int buttonPin = D6;
 
-int thermoArray[12];
+MAX6675 thermocouple(SCKPIN, CSPIN, SOPIN);  // MAX6675(int8_t SCLK, int8_t CS, int8_t MISO);
 
 //int readTemperatureThermocouple (*thermoArray);
 
@@ -34,23 +35,18 @@ SYSTEM_MODE(SEMI_AUTOMATIC);
 
 void setup() {
   Serial.begin(9600);
-  pinMode(SCKPIN, INPUT);
-  pinMode(CSPIN, INPUT);
-  pinMode(SOPIN, INPUT);
-  pinMode(buttonPin, INPUT);
+  delay(500);
+  // pinMode(SCKPIN, INPUT);
+  // pinMode(CSPIN, INPUT);
+  // pinMode(SOPIN, INPUT);
+  // pinMode(buttonPin, INPUT);
 }
 
 // loop() runs over and over again, as quickly as it can execute.
 void loop() {
-//  readTemperatureThermocouple(*thermoArray);
-  int i = 0;
-  for (i=0;i<=11;i++) {
-    Serial.printf("%d %d %d \n", digitalRead(SCKPIN), digitalRead(CSPIN), digitalRead(SOPIN));
-
-//   thermoArray[i] = digitalRead(SOPIN);
-//    Serial.printf("place %d is value %d \n",i,thermoArray[i]);
-    delay(100);
-  }
+  Serial.printf("c = %f \n", thermocouple.readCelsius());
+  Serial.printf("f = %f \n", thermocouple.readFahrenheit());
+  delay(5000); // must delay minimum of 250ms
 }
 
 // int readTemperatureThermocouple(*thermoArray) {
