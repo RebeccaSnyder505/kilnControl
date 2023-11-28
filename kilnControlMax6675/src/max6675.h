@@ -5,7 +5,7 @@
 #ifndef ADAFRUIT_MAX6675_H
 #define ADAFRUIT_MAX6675_H
 
-#include "Arduino.h"
+//#include "Arduino.h"
 
 /**************************************************************************/
 /*!
@@ -14,7 +14,7 @@
 /**************************************************************************/
 class MAX6675 {
 public:
-  MAX6675(int8_t SCLK, int8_t CS, int8_t MISO);
+  MAX6675((int SCLK), (int CS), (int MISO));
 
   float readCelsius(void);
   float readFahrenheit(void);
