@@ -14,9 +14,9 @@ SYSTEM_MODE(SEMI_AUTOMATIC);
 #include "SPI.h"
 #include "MAX6675.h"
 
-#define MAXDO     D16 //7 // Defining the MISO pin
-#define MAXCS     D18 //6 // Defining the CS pin
-#define MAXCLK    D17 //5 // Defining the SCK pin
+const int MAXDO = D16; //7 // Defining the MISO pin
+const int MAXCS = D18; //6 // Defining the CS pin
+const int MAXCLK = D17; //5 // Defining the SCK pin
 
 
 MAX6675 thermocouple;
@@ -24,12 +24,11 @@ MAX6675 thermocouple;
 
 void setup ()
 {
-  Serial.begin(115200);
-  Serial.println(__FILE__);
-  Serial.println();
-  delay(250);
+  Serial.begin(9600);
+  waitFor(Serial.isConnected, 10000);
 
-  thermocouple.begin(SCK, SS, MISO);
+
+  thermocouple.begin(MAXCS, MAXCS, MAXDO);
 }
 
 
