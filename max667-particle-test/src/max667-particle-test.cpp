@@ -8,22 +8,20 @@
 
 // Include Particle Device OS APIs
 #include "Particle.h"
+#include "SPI.h"
 
-// this example is public domain. enjoy!
-// www.ladyada.net/learn/sensors/thermocouple
+#include "max6675-particle.h"
 
-#include "max6675.h"
-
-int thermoDO = 4; // CHANGE TO PINS
-int thermoCS = 5;
-int thermoCLK = 6;
+int thermoDO = D16; // CHANGE TO PINS
+int thermoCS = D18;
+int thermoCLK = D17;
 
 MAX6675 thermocouple(thermoCLK, thermoCS, thermoDO);
 
   
 void setup() {
   Serial.begin(9600);
-  Wait.for(5000);
+  waitFor(Serial.isConnected,5000);
   Serial.println("MAX6675 test");
   // wait for MAX chip to stabilize
   delay(500);
