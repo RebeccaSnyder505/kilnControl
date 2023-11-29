@@ -9,27 +9,33 @@
 // Include Particle Device OS APIs
 #include "Particle.h"
 
-// Let Device OS manage the connection to the Particle Cloud
-SYSTEM_MODE(AUTOMATIC);
+// this example is public domain. enjoy!
+// www.ladyada.net/learn/sensors/thermocouple
 
-// Run the application and system concurrently in separate threads
-SYSTEM_THREAD(ENABLED);
+#include "max6675.h"
 
-// Show system, cloud connectivity, and application logs over USB
-// View logs with CLI using 'particle serial monitor --follow'
-SerialLogHandler logHandler(LOG_LEVEL_INFO);
+int thermoDO = 4; // CHANGE TO PINS
+int thermoCS = 5;
+int thermoCLK = 6;
 
-// setup() runs once, when the device is first turned on
+MAX6675 thermocouple(thermoCLK, thermoCS, thermoDO);
+
+  
 void setup() {
-  // Put initialization like pinMode and begin functions here
+  Serial.begin(9600);
+  Wait.for(5000);
+  Serial.println("MAX6675 test");
+  // wait for MAX chip to stabilize
+  delay(500);
 }
 
-// loop() runs over and over again, as quickly as it can execute.
 void loop() {
-  // The core of your code will likely live here.
-
-  // Example: Publish event to cloud every 10 seconds. Uncomment the next 3 lines to try it!
-  // Log.info("Sending Hello World to the cloud!");
-  // Particle.publish("Hello world!");
-  // delay( 10 * 1000 ); // milliseconds and blocking - see docs for more info!
+  // basic readout test, just print the current temp
+  
+   Serial.print("C = "); 
+   Serial.println(thermocouple.readCelsius());
+   Serial.print("F = ");
+   Serial.println(thermocouple.readFahrenheit());
+ 
+   delay(1000);
 }
