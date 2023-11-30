@@ -4,9 +4,9 @@
  * Date: 2023-11-30
  * 
  * 
- * use ctrl-shift-p to install "MAX6675_CNM", particle library for thermocouple board 
- * install "Adafruit_SSD1306"
- * install "Adafruit_GFX"
+ *  use ctrl-shift-p to install "MAX6675_CNM", particle library for thermocouple board 
+ *  install "Adafruit_SSD1306"
+ *  DO NOT install "Adafruit_GFX" separately  
  * 
  * 
  * For comprehensive documentation and examples, please visit:
@@ -56,6 +56,13 @@ void setup() {
 
 // loop() runs over and over again, as quickly as it can execute.
 void loop() {
+  thermocoupleStatus = thermocouple.read();
+  if (thermocoupleStatus != STATUS_OK) {
+    Serial.printf("ERROR WITH THERMOCOUPLE!\n");
+  }
+  else {
+    Serial.printf("thermocouple %d",thermocoupleStatus);
+  }
   Serial.printf("raw data %d \n", thermocouple.getRawData());
   tempC = thermocouple.getTemperature();
   tempF = (9.0/5.0)* tempC + 32;
@@ -74,3 +81,5 @@ void loop() {
   delay(2000);
 }
  
+
+
