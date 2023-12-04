@@ -12,6 +12,12 @@
  * 
  * For comprehensive documentation and examples, please visit:
  * https://docs.particle.io/firmware/best-practices/firmware-template/
+ * 
+ * 
+ * AFTER LUNCH - IOT timer for hold?
+ * -still need total time record for $ calc
+ * -test with relay, thermo, maybe a "firiing sched" w/ hot water
+ * 
  */
 
 // Include Particle Device OS APIs
@@ -19,6 +25,7 @@
 #include "MAX6675.h"
 #include "Adafruit_GFX.h"
 #include "Adafruit_SSD1306.h"
+#include "IoTTimer.h"
 
 #define AFAP 50000 // "As Fast As Possible" -- use more degrees than is possible
 
@@ -32,6 +39,9 @@ const int RELAYPIN = D10;
 //Adafruit OLED
 #define OLED_RESET D4
 Adafruit_SSD1306 display(OLED_RESET);
+
+//IoTTimer
+IoTTimer holdTimeTimer;
 
 const int numberOfSegments = 5; // conventionally numbering starts at 1
 // glass full fuse sample firing schedule, source: https://www.bullseyeglass.com/wp-content/uploads/2023/02/technotes_04.pdf
@@ -107,7 +117,7 @@ void loop() {
     Serial.printf("ERROR WITH THERMOCOUPLE!\n");
   }
   else {
-    Serial.printf("thermocouple %d",thermocoupleStatus);
+    Serial.printf("thermocouple %d \n",thermocoupleStatus);
   }
   Serial.printf("raw data %d \n", thermocouple.getRawData());
   tempC = thermocouple.getTemperature();
@@ -126,15 +136,19 @@ void loop() {
     targetTemp = (firingSchedule [i][1]);
     targetSlope = (firingSchedule [i][0]);
     tempC = thermocouple.getTemperature();
-    delay (250);
-    while (tempC != targetTemp) {
+    tempF = (9.0/5.0)* tempC + 32;
+    displayTemperatures(tempF,tempC);
+    delay(1000);
+    while (tempF != targetTemp) {
       tempC = thermocouple.getTemperature();
+      tempF = (9.0/5.0)* tempC + 32;
       currentSlope = (targetTemp - tempC) / (millis()-timeSegmentStart);
       kilnAccumulatedTimePowered[i]=0;
       if (currentSlope <= targetSlope) {
         digitalWrite(RELAYPIN,HIGH);
         //relayClosed = true; 
         timeRelayClosed = millis(); //TIME ACCUMUL NEEDS WORK
+        Serial.printf("relay ON, segment %d, curr %f, target %d \n", currentSegment, tempF, targetTemp);
       }
       else {
         digitalWrite(RELAYPIN,LOW); // turn off relay if slope greater than desired
@@ -143,30 +157,37 @@ void loop() {
       }
     } 
     holdTimeStartActual[i] = millis();
-    if (millis() <= (holdTimeStartActual[i] + ((firingSchedule[i][2])*60000))) {
+    holdTimeTimer.startTimer((firingSchedule[i][2])*60000);
+    //if (millis() <= (holdTimeStartActual[i] + ((firingSchedule[i][2])*60000))) {
+    if (!holdTimeTimer.isTimerReady()) {
       tempC = thermocouple.getTemperature();
-      if (tempC <= targetTemp) {
+      tempF = (9.0/5.0)* tempC + 32;
+      if (tempF <= targetTemp) {
         digitalWrite(RELAYPIN,HIGH);
         timeRelayClosed = millis();
+        Serial.printf("hold & heat \n");
       }
       else {
         digitalWrite(RELAYPIN,LOW); // turn off relay if slope greater than desired
         kilnAccumulatedTimePowered[i] = (millis()-timeRelayClosed) + kilnAccumulatedTimePowered[i];
+        Serial.printf("hold & relay off \n");
       }
-    }    
+    }
   }
 }
 
 
 
-void displayTemperatures(float fahrenheit, float celsius) {
+void displayTemperatures(float fahrenheit, float celsius) { //display info on OLED
   display.clearDisplay();   // clears the screen and buffer
   display.setTextSize(1);
   display.setTextColor(WHITE);
   display.setCursor(0,0);
   display.printf("F %f \n",fahrenheit);
-  display.setTextColor(BLACK, WHITE); // 'inverted' text
   display.printf("C %f \n",celsius); 
+  display.setTextColor(BLACK, WHITE); // 'inverted' text
+  display.printf("segment %d \n",currentSegment);
+  display.printf("target %d F, at %f per hr \n", targetTemp, targetSlope);
   display.display();
 }
 
