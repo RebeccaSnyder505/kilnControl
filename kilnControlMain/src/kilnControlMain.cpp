@@ -7,6 +7,7 @@
  *  use ctrl-shift-p to install "MAX6675_CNM", particle library for thermocouple board 
  *  install "Adafruit_SSD1306"
  *  DO NOT install "Adafruit_GFX" separately  
+ *  install "IoTClassroom_CNM"
  * 
  * 
  * For comprehensive documentation and examples, please visit:
@@ -21,10 +22,12 @@
 
 #define AFAP 50000 // "As Fast As Possible" -- use more degrees than is possible
 
+
 //thermocouple
 MAX6675 thermocouple;
 byte thermocoupleStatus;
 float tempC, tempF;
+const int RELAYPIN = D10;
 
 //Adafruit OLED
 #define OLED_RESET D4
@@ -33,30 +36,36 @@ Adafruit_SSD1306 display(OLED_RESET);
 const int numberOfSegments = 5; // conventionally numbering starts at 1
 // glass full fuse sample firing schedule, source: https://www.bullseyeglass.com/wp-content/uploads/2023/02/technotes_04.pdf
 //    for two layers of 3mm (1/8") thickness, 12" diam with top and side elements
-int firingSchedule1 [numberOfSegments] [3] = {
+int firingSchedule [numberOfSegments] [3] = {
   // DPH (degrees F per hour), target temp in F, hold time in minutes
+  // USE NEGATIVE DPH FOR TEMP REDUCTIONS
   {400, 1250, 30}, // initial heat and rapid soak
   {600, 1490, 10}, // rapid heat process soak
-  {AFAP, 900, 30}, // rapid cool anneal soak
-  {150, 700, 0},  // anneal cool
-  {AFAP, 70, 0}
+  {-AFAP, 900, 30}, // rapid cool anneal soak
+  {-150, 700, 0},  // anneal cool
+  {-AFAP, 70, 0}
 };
 
 int currentSegment;
-int TargetTemp;
-
-//kiln temperature related
-int kilnFarenheitEndDataActual [numberOfSegments]; //will want the temp of ending time
-int kilnTimeStartDataActual [numberOfSegments]; //will want the "start" of ending time
-
-int currentTempKiln; // current temp in fahrenheit
-int timeSegmentStarted; 
-float tempDifferenceFromSegmentStart;
+unsigned long timeSegmentStart;
+int targetTemp;
+int currentTemp;
+unsigned long timeFiringRunStarts;
 double targetSlope;
 double currentSlope;
+int i;
+bool relayClosed;
+unsigned long timeRelayClosed;
 
-// note, will need to account for this somehow
-//target temperature, "reached" should be temp remaining in range
+
+
+
+int kilnFarenheitEndActual [numberOfSegments]; //will want the temp of ending time
+unsigned long kilnTimeStartActul [numberOfSegments];
+unsigned long holdTimeStartActual [numberOfSegments];
+unsigned long kilnAccumulatedTimePowered [numberOfSegments]; //track time on to calculate electric usage
+
+
 
 
 
@@ -72,6 +81,10 @@ void setup() {
   Serial.begin(9600);
   waitFor(Serial.isConnected,10000);
 
+  pinMode(RELAYPIN,OUTPUT);
+  digitalWrite(RELAYPIN,LOW); //make sure relay is off for safety
+  relayClosed = false;
+
   //thermocouple setup
   thermocouple.begin(SCK, SS, MISO);
   thermocoupleStatus = thermocouple.read();
@@ -84,7 +97,6 @@ void setup() {
 
   //OLED setup
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  // display I am using has I2C addr 0x3C (for the 128x64)
-
 
 }
 
@@ -105,9 +117,47 @@ void loop() {
   //OLED
   displayTemperatures(tempF,tempC);
   delay(2000);
-
-
+  
+  timeFiringRunStarts = millis();
+  //kiln loop
+  for (i = 0; i <= numberOfSegments; i++) {
+    currentSegment = i + 1;
+    timeSegmentStart = millis();
+    targetTemp = (firingSchedule [i][1]);
+    targetSlope = (firingSchedule [i][0]);
+    tempC = thermocouple.getTemperature();
+    delay (250);
+    while (tempC != targetTemp) {
+      tempC = thermocouple.getTemperature();
+      currentSlope = (targetTemp - tempC) / (millis()-timeSegmentStart);
+      kilnAccumulatedTimePowered[i]=0;
+      if (currentSlope <= targetSlope) {
+        digitalWrite(RELAYPIN,HIGH);
+        //relayClosed = true; 
+        timeRelayClosed = millis(); //TIME ACCUMUL NEEDS WORK
+      }
+      else {
+        digitalWrite(RELAYPIN,LOW); // turn off relay if slope greater than desired
+        //relayClosed = false;
+        kilnAccumulatedTimePowered[i] = (millis()-timeRelayClosed) + kilnAccumulatedTimePowered[i];
+      }
+    } 
+    holdTimeStartActual[i] = millis();
+    if (millis() <= (holdTimeStartActual[i] + ((firingSchedule[i][2])*60000))) {
+      tempC = thermocouple.getTemperature();
+      if (tempC <= targetTemp) {
+        digitalWrite(RELAYPIN,HIGH);
+        timeRelayClosed = millis();
+      }
+      else {
+        digitalWrite(RELAYPIN,LOW); // turn off relay if slope greater than desired
+        kilnAccumulatedTimePowered[i] = (millis()-timeRelayClosed) + kilnAccumulatedTimePowered[i];
+      }
+    }    
+  }
 }
+
+
 
 void displayTemperatures(float fahrenheit, float celsius) {
   display.clearDisplay();   // clears the screen and buffer
@@ -119,4 +169,10 @@ void displayTemperatures(float fahrenheit, float celsius) {
   display.printf("C %f \n",celsius); 
   display.display();
 }
+
+
+
+
+
+
 
