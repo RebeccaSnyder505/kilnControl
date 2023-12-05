@@ -46,14 +46,25 @@ IoTTimer holdTimeTimer;
 const int numberOfSegments = 5; // conventionally numbering starts at 1
 // glass full fuse sample firing schedule, source: https://www.bullseyeglass.com/wp-content/uploads/2023/02/technotes_04.pdf
 //    for two layers of 3mm (1/8") thickness, 12" diam with top and side elements
-int firingSchedule [numberOfSegments] [3] = {
+// int firingSchedule [numberOfSegments] [3] = {
+//   // DPH (degrees F per hour), target temp in F, hold time in minutes
+//   // USE NEGATIVE DPH FOR TEMP REDUCTIONS
+//   {400, 1250, 30}, // initial heat and rapid soak
+//   {600, 1490, 10}, // rapid heat process soak
+//   {-AFAP, 900, 30}, // rapid cool anneal soak
+//   {-150, 700, 0},  // anneal cool
+//   {-AFAP, 70, 0}
+// };
+
+//FOR KETTLE, for testing
+int firingSchedule [numberOfSegments] [3] = { //fake schedule to run kettle
   // DPH (degrees F per hour), target temp in F, hold time in minutes
   // USE NEGATIVE DPH FOR TEMP REDUCTIONS
-  {400, 1250, 30}, // initial heat and rapid soak
-  {600, 1490, 10}, // rapid heat process soak
-  {-AFAP, 900, 30}, // rapid cool anneal soak
-  {-150, 700, 0},  // anneal cool
-  {-AFAP, 70, 0}
+  {AFAP, 180, 0}, // heat quickly to a nice temp for green tea
+  {10, 200, 10}, // slowly heat for other tea types
+  {0, 200, 30}, // what happens at slope 0 when holding temp?
+  {10, 100, 30},  // slow cool to 100F
+  {-AFAP, 0, 0} // cool AFAP to zero
 };
 
 int currentSegment;
@@ -112,7 +123,7 @@ void setup() {
 
 // loop() runs over and over again, as quickly as it can execute.
 void loop() {
-  thermocoupleStatus = thermocouple.read();
+  thermocoupleStatus = thermocouple.read(); // do a read before each call for temp
   if (thermocoupleStatus != STATUS_OK) {
     Serial.printf("ERROR WITH THERMOCOUPLE!\n");
   }
@@ -130,21 +141,29 @@ void loop() {
   
   timeFiringRunStarts = millis();
   //kiln loop
-  for (i = 0; i <= numberOfSegments; i++) {
+  for (i = 0; i <= numberOfSegments; i++) { // going through the firing segments
     currentSegment = i + 1;
     timeSegmentStart = millis();
     targetTemp = (firingSchedule [i][1]);
     targetSlope = (firingSchedule [i][0]);
-    tempC = thermocouple.getTemperature();
-    tempF = (9.0/5.0)* tempC + 32;
+    //thermocouple.read();
+   // tempC = thermocouple.getTemperature();
+    //tempF = (9.0/5.0)* tempC + 32;
     displayTemperatures(tempF,tempC);
-    delay(1000);
-    while (tempF != targetTemp) {
+    //possible error condition -- if the below starts on the "wrong" side of target
+    //    temp, while loop end condition not reached
+    // also it is never reached because float to a bunch of decimal places
+    //    makes it hard to be 
+    while (abs(targetTemp-tempF) >=1 ) { //ramping up or down
+    // may cause error if heating rate is fast enough overshoot by >1 degree
+      delay(5000);
+      thermocouple.read();
       tempC = thermocouple.getTemperature();
       tempF = (9.0/5.0)* tempC + 32;
       currentSlope = (targetTemp - tempC) / (millis()-timeSegmentStart);
       kilnAccumulatedTimePowered[i]=0;
       if (currentSlope <= targetSlope) {
+        Serial.printf("current slope %f, target slope %f \n",currentSlope,targetSlope);
         digitalWrite(RELAYPIN,HIGH);
         //relayClosed = true; 
         timeRelayClosed = millis(); //TIME ACCUMUL NEEDS WORK
@@ -160,6 +179,8 @@ void loop() {
     holdTimeTimer.startTimer((firingSchedule[i][2])*60000);
     //if (millis() <= (holdTimeStartActual[i] + ((firingSchedule[i][2])*60000))) {
     if (!holdTimeTimer.isTimerReady()) {
+      delay(5000);
+      thermocouple.read();
       tempC = thermocouple.getTemperature();
       tempF = (9.0/5.0)* tempC + 32;
       if (tempF <= targetTemp) {
@@ -185,11 +206,13 @@ void displayTemperatures(float fahrenheit, float celsius) { //display info on OL
   display.setCursor(0,0);
   display.printf("F %f \n",fahrenheit);
   display.printf("C %f \n",celsius); 
-  display.setTextColor(BLACK, WHITE); // 'inverted' text
   display.printf("segment %d \n",currentSegment);
-  display.printf("target %d F, at %f per hr \n", targetTemp, targetSlope);
+  display.printf("target %d F, at %f.0 per hr \n", targetTemp, targetSlope);
   display.display();
 }
+
+
+
 
 
 
