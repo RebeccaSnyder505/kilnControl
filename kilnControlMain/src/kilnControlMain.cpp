@@ -14,9 +14,9 @@
  * https://docs.particle.io/firmware/best-practices/firmware-template/
  * 
  * 
- * AFTER LUNCH - IOT timer for hold?
+ * For tues - IOT timer for hold?
  * -still need total time record for $ calc
- * -test with relay, thermo, maybe a "firiing sched" w/ hot water
+ * -might try approaching heating/cooling/maintaining with switch case
  * 
  */
 
@@ -43,6 +43,7 @@ Adafruit_SSD1306 display(OLED_RESET);
 //IoTTimer
 IoTTimer holdTimeTimer;
 
+// RATE/TARGET/HOLD model
 const int numberOfSegments = 5; // conventionally numbering starts at 1
 // glass full fuse sample firing schedule, source: https://www.bullseyeglass.com/wp-content/uploads/2023/02/technotes_04.pdf
 //    for two layers of 3mm (1/8") thickness, 12" diam with top and side elements
@@ -57,20 +58,33 @@ const int numberOfSegments = 5; // conventionally numbering starts at 1
 // };
 
 //FOR KETTLE, for testing
+// RATE/TARGET/HOLD MODEL
+// int firingSchedule [numberOfSegments] [3] = { //fake schedule to run kettle
+//   // DPH (degrees F per hour), target temp in F, hold time in minutes
+//   // USE NEGATIVE DPH FOR TEMP REDUCTIONS
+//   {AFAP, 180, 0}, // heat quickly to a nice temp for green tea
+//   {10, 200, 10}, // slowly heat for other tea types
+//   {0, 200, 30}, // what happens at slope 0 when holding temp?
+//   {10, 100, 30},  // slow cool to 100F
+//   {-AFAP, 0, 0} // cool AFAP to zero
+// };
+
+//THE HEAT/COOL/MAINTAIN model, tuesday
+// {rate to reach target temp, target}
 int firingSchedule [numberOfSegments] [3] = { //fake schedule to run kettle
   // DPH (degrees F per hour), target temp in F, hold time in minutes
-  // USE NEGATIVE DPH FOR TEMP REDUCTIONS
-  {AFAP, 180, 0}, // heat quickly to a nice temp for green tea
-  {10, 200, 10}, // slowly heat for other tea types
-  {0, 200, 30}, // what happens at slope 0 when holding temp?
-  {10, 100, 30},  // slow cool to 100F
+  {AFAP, 110, 0}, // heat quickly to a nice temp for testing
+  {10, 110, 5}, // slowly heat 
+  {0, 100, 30}, // what happens at slope 0 when holding temp?
+  {10, 90, 30},  // slow cool to 100F
   {-AFAP, 0, 0} // cool AFAP to zero
 };
+int behavior;
 
 int currentSegment;
 unsigned long timeSegmentStart;
+float tempSegmentStart;
 int targetTemp;
-int currentTemp;
 unsigned long timeFiringRunStarts;
 double targetSlope;
 double currentSlope;
@@ -121,7 +135,8 @@ void setup() {
 
 }
 
-// loop() runs over and over again, as quickly as it can execute.
+
+
 void loop() {
   thermocoupleStatus = thermocouple.read(); // do a read before each call for temp
   if (thermocoupleStatus != STATUS_OK) {
@@ -150,17 +165,15 @@ void loop() {
    // tempC = thermocouple.getTemperature();
     //tempF = (9.0/5.0)* tempC + 32;
     displayTemperatures(tempF,tempC);
-    //possible error condition -- if the below starts on the "wrong" side of target
-    //    temp, while loop end condition not reached
-    // also it is never reached because float to a bunch of decimal places
-    //    makes it hard to be 
-    while (abs(targetTemp-tempF) >=1 ) { //ramping up or down
+  
+    while (abs(targetTemp-tempF) >=5 ) { //ramping up or down
     // may cause error if heating rate is fast enough overshoot by >1 degree
       delay(5000);
       thermocouple.read();
       tempC = thermocouple.getTemperature();
       tempF = (9.0/5.0)* tempC + 32;
-      currentSlope = (targetTemp - tempC) / (millis()-timeSegmentStart);
+      tempSegmentStart = tempF;
+      currentSlope = (tempSegmentStart - tempF) / (millis()-timeSegmentStart) * 3600000; // 3.6 million milliseconds per hour
       kilnAccumulatedTimePowered[i]=0;
       if (currentSlope <= targetSlope) {
         Serial.printf("current slope %f, target slope %f \n",currentSlope,targetSlope);
