@@ -165,14 +165,16 @@ void loop() {
    // tempC = thermocouple.getTemperature();   
     //tempF = (9.0/5.0)* tempC + 32;
     displayTemperatures(tempF,tempC);
+    tempSegmentStart = tempF;
   
+  // while loop for ramping up/down
+    Serial.printf("about to start ramp up/down, part of segment %d\n",currentSegment);
     while (abs(targetTemp-tempF) >=5 ) { //ramping up or down
       delay(5000);
       thermocouple.read();
       tempC = thermocouple.getTemperature();
       tempF = (9.0/5.0)* tempC + 32;
-      tempSegmentStart = tempF;
-      currentSlope = ((tempF - tempSegmentStart) / (millis()-timeSegmentStart)) * 3600000.0; // 3.6 million milliseconds per hour
+      currentSlope = ((tempSegmentStart - tempF) / (millis()-timeSegmentStart)) * 3600000.0; // 3.6 million milliseconds per hour
       kilnAccumulatedTimePowered[i]=0;
       if (currentSlope <= targetSlope) { 
         Serial.printf("current slope %g, target slope %g \n",currentSlope,targetSlope);
@@ -190,8 +192,9 @@ void loop() {
     } 
     holdTimeStartActual[i] = millis();
     holdTimeTimer.startTimer((firingSchedule[i][2])*3600000.0);
+      Serial.printf("about to start hold time, part of segment %d \n",currentSegment);
     //if (millis() <= (holdTimeStartActual[i] + ((firingSchedule[i][2])*60000))) {
-    if (!holdTimeTimer.isTimerReady()) {
+    while (!holdTimeTimer.isTimerReady()) {
       delay(5000);
       thermocouple.read();
       tempC = thermocouple.getTemperature();
@@ -206,7 +209,7 @@ void loop() {
         digitalWrite(RELAYPIN,LOW); // turn off relay if slope greater than desired
         kilnAccumulatedTimePowered[i] = (millis()-timeRelayClosed) + kilnAccumulatedTimePowered[i];
         Serial.printf("hold & relay off \n");
-        Serial.printf("relay ON, segment %d, curr %f, target %d \n", currentSegment, tempF, targetTemp);
+        Serial.printf("relay OFF, segment %d, curr %f, target %d \n", currentSegment, tempF, targetTemp);
       }
     }
   }
