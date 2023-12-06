@@ -74,9 +74,9 @@ const int numberOfSegments = 5; // conventionally numbering starts at 1
 int firingSchedule [numberOfSegments] [3] = { //fake schedule to run kettle
   // DPH (degrees F per hour), target temp in F, hold time in minutes
   {AFAP, 110, 0}, // heat quickly to a nice temp for testing
-  {10, 110, 5}, // slowly heat then 5 min hold
-  {0, 110, 5}, // 5 minute hold time -- maybe "rate" for hold time needs this value
-  {-10, 90, 30},  // slow cool to 100F
+  {-10, 100, 2}, // slowly cool then 5 min hold
+  {0, 100, 2}, //  hold time -- maybe "rate" for hold time needs 0 ?
+  {-10, 90, 2},  // slow cool
   {-AFAP, 0, 0} // cool AFAP to zero
 };
 int behavior;
@@ -91,6 +91,8 @@ double currentSlope;
 int i;
 bool relayClosed;
 unsigned long timeRelayClosed;
+
+
 
 
 
@@ -161,23 +163,27 @@ void loop() {
     timeSegmentStart = millis();
     targetTemp = (firingSchedule [i][1]);
     targetSlope = (firingSchedule [i][0]);
+    currentSlope = targetSlope; // to give initial value for ramp up/down while loop
     //thermocouple.read();
    // tempC = thermocouple.getTemperature();   
     //tempF = (9.0/5.0)* tempC + 32;
     displayTemperatures(tempF,tempC);
     tempSegmentStart = tempF;
+    timeSegmentStart = millis();
   
   // while loop for ramping up/down
     Serial.printf("about to start ramp up/down, part of segment %d\n",currentSegment);
-    while (abs(targetTemp-tempF) >=5 ) { //ramping up or down
+    while ((currentSlope > 0 && tempF < targetTemp) || (currentSlope < 0 && tempF > targetTemp)) { 
       delay(5000);
       thermocouple.read();
       tempC = thermocouple.getTemperature();
       tempF = (9.0/5.0)* tempC + 32;
       currentSlope = ((tempSegmentStart - tempF) / (millis()-timeSegmentStart)) * 3600000.0; // 3.6 million milliseconds per hour
+      tempSegmentStart = tempF;
+      timeSegmentStart = millis();
       kilnAccumulatedTimePowered[i]=0;
+      Serial.printf("current slope %g, target slope %g \n",currentSlope,targetSlope);
       if (currentSlope <= targetSlope) { 
-        Serial.printf("current slope %g, target slope %g \n",currentSlope,targetSlope);
         digitalWrite(RELAYPIN,HIGH);
         //relayClosed = true; 
         timeRelayClosed = millis(); //TIME ACCUMUL NEEDS WORK
@@ -191,8 +197,8 @@ void loop() {
       }
     } 
     holdTimeStartActual[i] = millis();
-    holdTimeTimer.startTimer((firingSchedule[i][2])*3600000.0);
-      Serial.printf("about to start hold time, part of segment %d \n",currentSegment);
+    holdTimeTimer.startTimer((firingSchedule[i][2])*60000.0);
+    Serial.printf("about to start hold time, part of segment %d \n",currentSegment);
     //if (millis() <= (holdTimeStartActual[i] + ((firingSchedule[i][2])*60000))) {
     while (!holdTimeTimer.isTimerReady()) {
       delay(5000);
