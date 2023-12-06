@@ -8,6 +8,7 @@
  *  install "Adafruit_SSD1306"
  *  DO NOT install "Adafruit_GFX" separately  
  *  install "IoTClassroom_CNM"
+ *  install "Adafruit_MQTT"
  * 
  * 
  * For comprehensive documentation and examples, please visit:
@@ -20,12 +21,17 @@
  * 
  */
 
-// Include Particle Device OS APIs
+
 #include "Particle.h"
-#include "MAX6675.h"
-#include "Adafruit_GFX.h"
-#include "Adafruit_SSD1306.h"
+#include "MAX6675.h"  // thermocouple board
+#include "Adafruit_GFX.h" 
+#include "Adafruit_SSD1306.h" // OLED screen
 #include "IoTTimer.h"
+#include <Adafruit_MQTT.h>
+//#include "Adafruit_MQTT/Adafruit_MQTT_SPARK.h"
+//#include "Adafruit_MQTT/Adafruit_MQTT.h"
+#include "credentials.h"
+
 
 #define AFAP 50000 // "As Fast As Possible" -- use more degrees than is possible
 
@@ -103,14 +109,41 @@ unsigned long holdTimeStartActual [numberOfSegments];
 unsigned long kilnAccumulatedTimePowered [numberOfSegments]; //track time on to calculate electric usage
 
 
+void displayTemperatures(float fahrenheit, float celsius);
+
+// to work with AdaFruit
+unsigned long prevAdafruitTime;
+const int timeIntervalAdafruit = 10000; 
+unsigned long updateAdafruitTemp(float tempF,unsigned long prevAdafruitTime,int timeIntervalAdafruit); // function for tempF to adafruit
 
 
 
+// the following is AdaFruit MQTT setup 
+/************ Global State (you don't need to change this!) ***   ***************/ 
+TCPClient TheClient(); 
 
+// Setup the MQTT client class by passing in the WiFi client and MQTT server and login details. 
+
+Adafruit_MQTT_SPARK mqtt(&TheClient,AIO_SERVER,AIO_SERVERPORT,AIO_USERNAME,AIO_KEY); 
+
+/****************************** Feeds ***************************************/ 
+// Setup Feeds to publish or subscribe 
+// Notice MQTT paths for AIO follow the form: <username>/feeds/<feedname> 
+
+Adafruit_MQTT_Publish thermocoupleTempF = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/thermocoupletempf");
+Adafruit_MQTT_Subscribe kilnButton = Adafruit_MQTT_Subscribe(&mqtt, AIO_USERNAME "/feeds/kiln");
+
+/************Declare Variables*************/
+unsigned int last, lastTime;
+float subValue,pubValue;
+
+/************Declare Functions*************/
+void MQTT_connect();
+bool MQTT_ping();
 
 
 SYSTEM_MODE(SEMI_AUTOMATIC);
-void displayTemperatures(float fahrenheit, float celsius);
+
 
 
 
@@ -135,6 +168,17 @@ void setup() {
   //OLED setup
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  // display I am using has I2C addr 0x3C (for the 128x64)
 
+  // Wifi setup
+  // Connect to Internet but not Particle Cloud
+  WiFi.on();
+  WiFi.connect();
+  while(WiFi.connecting()) {
+    Serial.printf(".");
+  }
+  Serial.printf("\n\n");
+
+  // MQTT for AdaFruit
+  prevAdafruitTime = millis();
 }
 
 
@@ -240,6 +284,63 @@ void displayTemperatures(float fahrenheit, float celsius) { //display info on OL
 
 
 
+
+
+void MQTT_connect() {
+  int8_t ret;
+ 
+  // Return if already connected.
+  if (mqtt.connected()) {
+    return;
+  }
+ 
+  Serial.print("Connecting to MQTT... ");
+ 
+  while ((ret = mqtt.connect()) != 0) { // connect will return 0 for connected
+       Serial.printf("Error Code %s\n",mqtt.connectErrorString(ret));
+       Serial.printf("Retrying MQTT connection in 5 seconds...\n");
+       mqtt.disconnect();
+       delay(5000);  // wait 5 seconds and try again
+  }
+  Serial.printf("MQTT Connected!\n");
+}
+
+
+bool MQTT_ping() {
+  static unsigned int last;
+  bool pingStatus;
+
+  if ((millis()-last)>120000) {
+      Serial.printf("Pinging MQTT \n");
+      pingStatus = mqtt.ping();
+      if(!pingStatus) {
+        Serial.printf("Disconnecting \n");
+        mqtt.disconnect();
+      }
+      last = millis();
+  }
+  return pingStatus;
+}
+
+
+
+ unsigned long updateAdafruitTemp(float tempF,unsigned long prevAdafruitTime,int timeIntervalAdafruit){
+  float temp;
+  MQTT_connect();
+  MQTT_ping();
+  if((millis()-prevAdafruitTime*1.0) > timeIntervalAdafruit*1.0) {
+    if(mqtt.Update()) {
+      thermocoupleTempF.publish(temp);
+    }
+    Serial.printf("adafruit updated temp %f",temp);
+    prevAdafruitTime = millis();
+  }
+  return prevAdafruitTime;
+}
+
+
+
+ 
 
 
 
