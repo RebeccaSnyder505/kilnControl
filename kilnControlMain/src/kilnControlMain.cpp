@@ -28,8 +28,8 @@
 #include "Adafruit_SSD1306.h" // OLED screen
 #include "IoTTimer.h"
 #include <Adafruit_MQTT.h>
-//#include "Adafruit_MQTT/Adafruit_MQTT_SPARK.h"
-//#include "Adafruit_MQTT/Adafruit_MQTT.h"
+#include "Adafruit_MQTT/Adafruit_MQTT_SPARK.h"
+#include "Adafruit_MQTT/Adafruit_MQTT.h"
 #include "credentials.h"
 
 
@@ -120,7 +120,7 @@ unsigned long updateAdafruitTemp(float tempF,unsigned long prevAdafruitTime,int 
 
 // the following is AdaFruit MQTT setup 
 /************ Global State (you don't need to change this!) ***   ***************/ 
-TCPClient TheClient(); 
+TCPClient TheClient; 
 
 // Setup the MQTT client class by passing in the WiFi client and MQTT server and login details. 
 
@@ -227,6 +227,7 @@ void loop() {
       timeSegmentStart = millis();
       kilnAccumulatedTimePowered[i]=0;
       Serial.printf("current slope %g, target slope %g \n",currentSlope,targetSlope);
+      updateAdafruitTemp(tempF,prevAdafruitTime,timeIntervalAdafruit);
       if (currentSlope <= targetSlope) { 
         digitalWrite(RELAYPIN,HIGH);
         //relayClosed = true; 
@@ -249,6 +250,7 @@ void loop() {
       thermocouple.read();
       tempC = thermocouple.getTemperature();
       tempF = (9.0/5.0)* tempC + 32;
+      updateAdafruitTemp(tempF,prevAdafruitTime,timeIntervalAdafruit);
       if (tempF <= targetTemp) {
         digitalWrite(RELAYPIN,HIGH);
         timeRelayClosed = millis();
