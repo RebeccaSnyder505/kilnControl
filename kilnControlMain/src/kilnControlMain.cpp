@@ -3,6 +3,14 @@
  * Author: Rebecca Snyder
  * Date: 2023-11-30
  * 
+ * Control elaborate heat/cool schedules for a glass kiln, 
+ * can specify  -degrees F per hour for each segment
+ *              -target temperature for each segment
+ *              -hold time for each segment
+ * authorized user must login to https://io.adafruit.com/ to start the schedule             
+ * 
+ * 
+ * 
  * 
  *  use ctrl-shift-p to install "MAX6675_CNM", particle library for thermocouple board 
  *  install "Adafruit_SSD1306"
@@ -79,8 +87,8 @@ const int numberOfSegments = 5; // conventionally numbering starts at 1
 // {rate to reach target temp, target}
 int firingSchedule [numberOfSegments] [3] = { //fake schedule to run kettle
   // DPH (degrees F per hour), target temp in F, hold time in minutes
-  {AFAP, 110, 0}, // heat quickly to a nice temp for testing
-  {-10, 100, 2}, // slowly cool then 5 min hold
+  {AFAP, 120, 0}, // heat quickly to a nice temp for testing
+  {-10, 150, 2}, // slowly cool then 5 min hold
   {0, 100, 2}, //  hold time -- maybe "rate" for hold time needs 0 ?
   {-10, 90, 2},  // slow cool
   {-AFAP, 0, 0} // cool AFAP to zero
@@ -97,6 +105,7 @@ double currentSlope;
 int i;
 bool relayClosed;
 unsigned long timeRelayClosed;
+bool adafruitKilnButton;
 
 
 
@@ -142,7 +151,7 @@ void MQTT_connect();
 bool MQTT_ping();
 
 
-SYSTEM_MODE(SEMI_AUTOMATIC);
+//SYSTEM_MODE(AUTOMATIC);
 
 
 
@@ -179,11 +188,14 @@ void setup() {
 
   // MQTT for AdaFruit
   prevAdafruitTime = millis();
+  mqtt.subscribe(&kilnButton);
 }
 
 
 
 void loop() {
+  MQTT_connect();
+  MQTT_ping();
   thermocoupleStatus = thermocouple.read(); // do a read before each call for temp
   if (thermocoupleStatus != STATUS_OK) {
     Serial.printf("ERROR WITH THERMOCOUPLE!\n");
@@ -197,9 +209,29 @@ void loop() {
   Serial.printf("Temperature:%0.2f or %0.2f\n",tempF,tempC);
   
   //OLED
-  displayTemperatures(tempF,tempC);
-  delay(2000);
-  
+  adafruitKilnButton = FALSE;
+  Serial.printf("Authorized user can login to toggle kiln cycle start\n");
+  display.clearDisplay(); 
+  display.setTextSize(1);
+  display.setTextColor(WHITE);
+  display.setCursor(0,0);
+  display.printf("%6.2f F \n",tempF);
+  display.printf("%6.2f C \n",tempC); 
+  display.printf("login via AdaFruit to start kiln cycle");
+  display.display();
+  //check Adafruit Button
+  adafruitKilnButton = FALSE;
+  while (!adafruitKilnButton) {
+    Adafruit_MQTT_Subscribe *subscription;
+    while ((subscription = mqtt.readSubscription(100))) { // the subscription part
+      if (subscription == &kilnButton) {
+        Serial.printf("if (subscription == &kilnButton) \n");
+        subValue = atof((char *)kilnButton.lastread);
+        Serial.printf("kiln toggled on AdaFruit %f \n", subValue);
+        adafruitKilnButton = TRUE;
+      }
+    }
+  }
   timeFiringRunStarts = millis();
   //kiln loop
   for (i = 0; i <= numberOfSegments; i++) { // going through the firing segments
@@ -227,7 +259,7 @@ void loop() {
       timeSegmentStart = millis();
       kilnAccumulatedTimePowered[i]=0;
       Serial.printf("current slope %g, target slope %g \n",currentSlope,targetSlope);
-      updateAdafruitTemp(tempF,prevAdafruitTime,timeIntervalAdafruit);
+      //updateAdafruitTemp(tempF,prevAdafruitTime,timeIntervalAdafruit);
       if (currentSlope <= targetSlope) { 
         digitalWrite(RELAYPIN,HIGH);
         //relayClosed = true; 
@@ -290,7 +322,7 @@ void displayTemperatures(float fahrenheit, float celsius) { //display info on OL
 
 void MQTT_connect() {
   int8_t ret;
- 
+  i = 0;
   // Return if already connected.
   if (mqtt.connected()) {
     return;
@@ -299,9 +331,14 @@ void MQTT_connect() {
   Serial.print("Connecting to MQTT... ");
  
   while ((ret = mqtt.connect()) != 0) { // connect will return 0 for connected
+      i++;
        Serial.printf("Error Code %s\n",mqtt.connectErrorString(ret));
        Serial.printf("Retrying MQTT connection in 5 seconds...\n");
        mqtt.disconnect();
+       if (i >= 6) {
+        Serial.printf("MQTT not connecting for 30 seconds, giving up \n");
+        return;
+       }
        delay(5000);  // wait 5 seconds and try again
   }
   Serial.printf("MQTT Connected!\n");
@@ -326,15 +363,14 @@ bool MQTT_ping() {
 
 
 
- unsigned long updateAdafruitTemp(float tempF,unsigned long prevAdafruitTime,int timeIntervalAdafruit){
-  float temp;
+ unsigned long updateAdafruitTemp(float temp,unsigned long prevAdafruitTime,int timeIntervalAdafruit){
   MQTT_connect();
   MQTT_ping();
+  Serial.printf("attempting adafruit update temp %f",temp);
   if((millis()-prevAdafruitTime*1.0) > timeIntervalAdafruit*1.0) {
     if(mqtt.Update()) {
       thermocoupleTempF.publish(temp);
     }
-    Serial.printf("adafruit updated temp %f",temp);
     prevAdafruitTime = millis();
   }
   return prevAdafruitTime;
